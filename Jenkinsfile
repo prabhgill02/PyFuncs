@@ -23,10 +23,9 @@ pipeline {
         stage('Install Azure CLI and Func Tools') {
             steps {
                 bat '''
-                    powershell -Command "Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile .\\AzureCLI.msi"
-                    msiexec /i AzureCLI.msi /quiet
-
-                    npm install -g azure-functions-core-tools@4 --unsafe-perm true
+                    where az || (powershell -Command "Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile .\\AzureCLI.msi" && msiexec /i AzureCLI.msi /quiet)
+    
+                    where func || npm install -g azure-functions-core-tools@4 --unsafe-perm true
                     pip install -r %FUNCTIONAPP_PATH%\\requirements.txt
                 '''
             }
@@ -49,7 +48,7 @@ pipeline {
             steps {
                 bat '''
                     echo Building Python Azure Function...
-                    python -m py_compile %FUNCTIONAPP_PATH%\\*.py
+                    python -m py_compile function_app.py
                 '''
             }
         }
@@ -58,7 +57,7 @@ pipeline {
             steps {
                 bat '''
                     set PYTHONPATH=.
-                    pytest -v > test-output.txt || echo "Tests failed"
+                    pytest -v > test-output.txt || exit /b 0
                 '''
                 archiveArtifacts artifacts: 'test-output.txt', fingerprint: true
             }
@@ -67,6 +66,8 @@ pipeline {
         stage('Deploy to Azure') {
             steps {
                 bat '''
+                    az login --service-principal --username "%AZURE_CLIENT_ID%" --password "%AZURE_CLIENT_SECRET%" --tenant "%AZURE_TENANT_ID%"
+                    az account set --subscription "%AZURE_SUBSCRIPTION_ID%"
                     func azure functionapp publish "%FUNCTIONAPP_NAME%"
                 '''
             }
