@@ -14,6 +14,13 @@ pipeline {
     }
 
     stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/prabhgill02/PyFuncs'
+            }
+        }
+
+    stages {
         stage('Install Azure CLI and Func Tools') {
             steps {
                 bat '''
