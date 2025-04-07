@@ -42,7 +42,6 @@ pipeline {
         stage('Run Unit Tests') {
             steps {
                 bat '''
-                    cd %FUNCTIONAPP_PATH%
                     pytest > test-output.txt || echo "Tests failed"
                 '''
                 // Archive test output
@@ -53,7 +52,6 @@ pipeline {
         stage('Deploy to Azure') {
             steps {
                 bat '''
-                    cd %FUNCTIONAPP_PATH%
                     func azure functionapp publish "%FUNCTIONAPP_NAME%"
                 '''
             }
