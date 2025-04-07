@@ -2,46 +2,67 @@ pipeline {
     agent any
 
     environment {
-        // Set your Azure Service Principal credentials (from Jenkins Credentials Store)
+        // Azure Service Principal credentials from Jenkins credentials store
         AZURE_CLIENT_ID = credentials('AZURE_CLIENT_ID')
         AZURE_CLIENT_SECRET = credentials('AZURE_CLIENT_SECRET')
         AZURE_SUBSCRIPTION_ID = credentials('AZURE_SUBSCRIPTION_ID')
         AZURE_TENANT_ID = credentials('AZURE_TENANT_ID')
+
         FUNCTIONAPP_NAME = 'FunctionsAppHello'
         RESOURCE_GROUP = 'FunctionsAppHello_group'
+        FUNCTIONAPP_PATH = '.' // Folder containing your function code
     }
 
     stages {
         stage('Install Azure CLI and Func Tools') {
             steps {
-                sh '''
-                    curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+                bat '''
+                    powershell -Command "Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile .\\AzureCLI.msi"
+                    msiexec /i AzureCLI.msi /quiet
+
                     npm install -g azure-functions-core-tools@4 --unsafe-perm true
+                    pip install -r %FUNCTIONAPP_PATH%\\requirements.txt
                 '''
             }
         }
 
         stage('Azure Login') {
             steps {
-                sh '''
-                    az logout || true
-                    az login --service-principal --username %AZURE_CLIENT_ID% --password %AZURE_CLIENT_SECRET% --tenant %AZURE_TENANT_ID%
-                    az account set --subscription "AZURE_SUBSCRIPTION_ID"
-
+                bat '''
+                    az logout || exit 0
+                    az login --service-principal ^
+                        --username "%AZURE_CLIENT_ID%" ^
+                        --password "%AZURE_CLIENT_SECRET%" ^
+                        --tenant "%AZURE_TENANT_ID%"
+                    az account set --subscription "%AZURE_SUBSCRIPTION_ID%"
                 '''
             }
         }
 
-        stage('Build Function App') {
+        stage('Run Unit Tests') {
             steps {
-                sh 'func azure functionapp publish $FUNCTIONAPP_NAME --python'
+                bat '''
+                    cd %FUNCTIONAPP_PATH%
+                    pytest > test-output.txt || echo "Tests failed"
+                '''
+                // Archive test output
+                archiveArtifacts artifacts: '%FUNCTIONAPP_PATH%/test-output.txt', fingerprint: true
+            }
+        }
+
+        stage('Deploy to Azure') {
+            steps {
+                bat '''
+                    cd %FUNCTIONAPP_PATH%
+                    func azure functionapp publish "%FUNCTIONAPP_NAME%"
+                '''
             }
         }
     }
 
     post {
         always {
-            sh 'az logout || true'
+            bat 'az logout || exit 0'
         }
     }
 }
