@@ -20,7 +20,6 @@ pipeline {
             }
         }
 
-    stages {
         stage('Install Azure CLI and Func Tools') {
             steps {
                 bat '''
@@ -46,13 +45,22 @@ pipeline {
             }
         }
 
+        stage('Build') {
+            steps {
+                bat '''
+                    echo Building Python Azure Function...
+                    python -m py_compile %FUNCTIONAPP_PATH%\\*.py
+                '''
+            }
+        }
+
         stage('Run Unit Tests') {
             steps {
                 bat '''
-                    pytest > test-output.txt || echo "Tests failed"
+                    set PYTHONPATH=.
+                    pytest -v > test-output.txt || echo "Tests failed"
                 '''
-                // Archive test output
-                archiveArtifacts artifacts: '%FUNCTIONAPP_PATH%/test-output.txt', fingerprint: true
+                archiveArtifacts artifacts: 'test-output.txt', fingerprint: true
             }
         }
 
